@@ -46,7 +46,7 @@ Small throwaway prototypes, one page each.
 
 - **Breath spike.** Mic → RMS envelope, spectral centroid, spectral flatness. Show live numbers and a pass/fail "that was a breath" detector. Test on a laptop mic, phone, and headset.
 - **Pinwheel spike.** Webcam → track a coloured mark → spin speed and direction. Find out how fast a hand-made pinwheel actually spins and whether 30 fps is enough. This is the riskiest part of the project.
-- **Field spike (layout + look), done.** Fake meadow of ~2,000 patches. First version: breath seeds, blooms and fading; it led to the concept change. Current version: visits grow fibers, breaths are gusts that comb fibers and relax, pinwheel strokes bend with the comb. Meadow layout chosen over Hilbert (tentatively).
+- **Field spike (layout + look), done.** Fake meadow of ~2,000 patches. First version: breath seeds, blooms and fading; it led to the concept change. Current version: visits grow fibers, breaths are gusts that comb fibers and relax, pinwheel strokes bend with the comb. Meadow layout chosen over Hilbert (tentatively). Your visit lands in your real /16: the page asks Cloudflare's `1.1.1.1/cdn-cgi/trace` (falling back to ipify) for its IP and keeps only the first two numbers. In production the ingest Worker reads the IP itself, so no third-party lookup is needed.
 
 *Done when:* each open question in the architecture doc has a decision written down.
 

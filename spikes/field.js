@@ -724,24 +724,72 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-generate();
-layoutMeadow();
-layoutHilbert();
-for (const p of patches) {
-  placeInPatch(p);
-  // Historic gusts need meadow positions, so add them after layout.
-  for (let i = 0; i < p.pendingGusts; i++) addGust(p, p.habit.hour(), expo(10), false);
+// ---------- your network ----------
+// A static page can't see its own IP, so ask an echo service. Only the /16 prefix is kept;
+// the full address is dropped as soon as it is parsed and never stored or sent anywhere else.
+async function fetchPrefix() {
+  const sources = [
+    ['https://1.1.1.1/cdn-cgi/trace', (t) => /^ip=(.+)$/m.exec(t)?.[1]],
+    ['https://api.ipify.org?format=json', (t) => JSON.parse(t).ip],
+  ];
+  for (const [url, parse] of sources) {
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 3000);
+      const res = await fetch(url, { signal: ctl.signal, cache: 'no-store', credentials: 'omit' });
+      clearTimeout(timer);
+      const m = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec((parse(await res.text()) || '').trim());
+      if (m) return { a: +m[1], b: +m[2] };
+    } catch { /* try the next source */ }
+  }
+  return null;
 }
-// Your visit: a mid-sized neighbourhood stands in for your network.
-const mids = patches.filter((p) => p.fibers.length >= 18 && p.fibers.length <= 60);
-home = mids[Math.floor(rnd() * mids.length)];
-addFibers(home, nowHour(), 0);
-placeInPatch(home);
-for (const p of patches) summarise(p);
-for (const h of heads) summariseHead(h);
-resize();
-const ext = worldBounds(0);
-cam.scale = (Math.min(W, H) / (2 * ext)) * 0.95;
-drawDial();
-requestAnimationFrame(frame);
+
+// Find or create the head and patch for your prefix in the fake meadow.
+function ensurePatch(a, b) {
+  let head = heads.find((h) => h.a === a);
+  if (!head) {
+    head = { a, patches: [] };
+    heads.push(head);
+    heads.sort((x, y) => x.a - y.a);
+  }
+  let p = head.patches.find((q) => q.b === b);
+  if (!p) {
+    const habit = HABITS.find((h) => h.name === 'mixed');
+    p = { a, b, head, habit, crowd: false, fibers: [], pins: [], affecting: [], idx: patches.length, pendingGusts: 0 };
+    head.patches.push(p);
+    head.patches.sort((x, y) => x.b - y.b);
+    patches.push(p);
+  }
+  return p;
+}
+
+async function boot() {
+  resize();
+  $('stats').textContent = 'Finding your network…';
+  const prefix = await fetchPrefix();
+  generate();
+  if (prefix) {
+    home = ensurePatch(prefix.a, prefix.b);
+    $('you').textContent = `Your patch: ${prefix.a}.${prefix.b} (from your IP; only these two numbers are kept, in this tab).`;
+  } else {
+    const mids = patches.filter((p) => p.fibers.length >= 18 && p.fibers.length <= 60);
+    home = mids[Math.floor(rnd() * mids.length)];
+    $('you').textContent = `Couldn't look up your IP, so a stand-in patch ${home.a}.${home.b} is used.`;
+  }
+  addFibers(home, nowHour(), 0); // your visit
+  layoutMeadow();
+  layoutHilbert();
+  for (const p of patches) {
+    placeInPatch(p);
+    // Historic gusts need meadow positions, so add them after layout.
+    for (let i = 0; i < p.pendingGusts; i++) addGust(p, p.habit.hour(), expo(10), false);
+  }
+  for (const p of patches) summarise(p);
+  for (const h of heads) summariseHead(h);
+  cam.scale = (Math.min(W, H) / (2 * worldBounds(0))) * 0.95;
+  drawDial();
+  requestAnimationFrame(frame);
+}
+boot();
 window.__field = { draw, heads, patches, gusts, cam, params, flyTo, setLayout, blow, pin, visit, goHome, get home() { return home; } };
