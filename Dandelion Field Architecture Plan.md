@@ -1,21 +1,23 @@
 # Dandelion Field: Architecture Plan
 
-A living web art piece. Visitors blow into their microphone or onto a paper pinwheel, and their breath scatters a dandelion seed placed in an abstracted map of IP space. Everyone online at the same time of day blows in the same direction. Old breaths fade.
+A living web art piece. Every visit grows fibers in the visitor's patch of an abstracted map of IP space. Visitors blow into their microphone or onto a paper pinwheel, and their breath combs the fibers around them. Everyone online at the same time of day blows in the same direction. The comb slowly relaxes; the fibers stay forever.
 
 ## Concept
 
-- Each breath becomes a seed positioned by the visitor's network neighbourhood, never their exact address.
-- Shared IPs (offices, VPNs) appear as an anonymous crowd: many seeds clustered in one patch.
-- Wind direction comes from the visitor's local time of day and is frozen into the seed when the breath is recorded, so everyone at 4:00 local blows the same way.
-- Pinwheel spin direction adds a small personal swirl on top of the shared wind.
-- Two input modes, both first-class: breath via microphone and a physical paper pinwheel via camera. Each gets a slightly different visual representation in the same field.
-- The past never disappears: old breaths grow diffuse and sink into a shared colour palette. Returning visitors renew their breath.
+- **Visits grow fibers.** Each visit adds a few fibers to the visitor's network neighbourhood (a /16 patch), never their exact address. Fibers never disappear, so busy neighbourhoods grow into dense heads and the field keeps every visit it has ever had.
+- **Breath moves fibers.** A breath does not add anything of its own. It is a gust that combs the fibers along its wind: strongest in the breather's own patch, weaker in nearby patches of the same clump, nothing beyond. The gust plays out live, then the lean slowly relaxes back.
+- **Breaths are shared.** Every gust is stored and replayed, so visitors watch their neighbours' breaths move the fibers.
+- **Pinwheels leave strokes.** A pinwheel places a curled, streaming stroke along its wind, curled by spin direction. Strokes are also bent by local breath. They stay distinct for a few days, then fade.
+- **Shared IPs** (offices, VPNs, carrier NAT) appear as one crowded patch.
+- **Wind** comes from the visitor's local time of day and is frozen into each gust or stroke when it is recorded, so everyone at 4:00 local blows the same way.
+- **Colour** also comes from time of day: daytime visits are amber, dawn and dusk rose, night blue. Recent visits are brighter; old fibers dim but remain.
+- Two input modes, both first-class: breath via microphone and a physical paper pinwheel via camera.
 
 ## Design Constraints
 
 - Run as much as possible in the browser.
 - Minimal hosting and database cost. Data lives in static files, served in zones.
-- Store only what is needed: network position, rounded time, breath character, hashed device fingerprint.
+- Store only what is needed: network position, rounded time, gust character, a daily-salted device hash for de-duplicating visits.
 - No raw IPs or audio ever published.
 
 ## Components
@@ -26,26 +28,31 @@ A living web art piece. Visitors blow into their microphone or onto a paper pinw
 
 **Pinwheel mode.** The webcam tracks a bold mark on one blade frame to frame to compute spin speed and direction. Frame rate (about 30 fps) limits reliable speed to roughly 15 turns per second, so the template favours slower, stiffer blades. The mic can assist when the pinwheel blurs.
 
-**Breath fingerprint (about 20 bytes).**
+**Gust character (about 20 bytes).** Describes how a breath moves fibers.
 
-- Envelope: loudness curve resampled to 16 points, 4 to 8 bits each
-- Brightness: spectral centroid, 1 byte
-- Breathiness: spectral flatness, 1 byte (also validates it was a breath)
+- Envelope: loudness curve resampled to 16 points, 4 to 8 bits each. Replayed as the gust's push over time.
+- Brightness: spectral centroid, 1 byte. Bright breaths are sharp and short-reaching; dark breaths broad and gentle.
+- Breathiness: spectral flatness, 1 byte. Spreads the comb direction (turbulence) and drives wobble. Also part of validating that it was a breath.
 - Duration: 1 byte
-- Peak strength: 1 byte
+- Peak strength: 1 byte. Sets how hard and how far the gust pushes.
 - Mode flag: breath or pinwheel, plus spin direction
 
-**Device fingerprint.** A salted hash, used only to tell apart devices sharing one IP.
+**Device hash.** A daily-salted hash, used only to count one visit per device per day and to tell apart devices sharing one IP.
 
 ### 2. Ingest (edge function)
 
-A small serverless function, for example a Cloudflare Worker.
+A small serverless function, for example a Cloudflare Worker. Two record types:
+
+- **Visit:** patch, rounded local time.
+- **Gust / stroke:** patch, scatter position inside the patch, rounded local time (fixes wind and colour), character bytes.
+
+For both:
 
 - Reads the visitor IP.
-- Keeps the prefix (first two or three octets) to choose the neighbourhood.
-- Hashes the remainder with a secret, rotating key to scatter the seed inside its patch.
+- Keeps the prefix (first two octets for IPv4; a rule is still needed for IPv6) to choose the patch.
+- Hashes the remainder with a secret, rotating key to place a gust or stroke inside its patch.
 - Rounds the timestamp to a few minutes.
-- Discards the raw IP and appends the record to the log.
+- Discards the raw IP and appends the record to the log (batched; R2 has no append).
 
 ### 3. Storage
 
@@ -53,27 +60,26 @@ Cheap object storage, for example Cloudflare R2, holding the append log in short
 
 ### 4. Compaction (scheduled job)
 
-Runs every few minutes.
-
-- Rolls the log up into zone files keyed by IP prefix.
-- Melts aged seeds into a per-patch colour layer, keeping storage bounded.
-- Builds a low-detail summary for the zoomed-out view.
-- Rotates and discards the secret key, so old seeds can never be linked back.
+- **Visits:** folded into per-patch fiber records. Fiber positions are derived deterministically from visit order, so only a compact visit history per patch is stored (rounded time per visit, or per-day hour-of-day counts). This is the only part of storage that grows forever, and it grows with visits, not breaths.
+- **Gusts:** kept as individual events in zone files while they still visibly comb the fibers. Once fully relaxed (after several half-lives) they are deleted.
+- **Strokes:** kept while distinct, then dropped (optionally leaving a trace in the patch's ground colour).
+- Builds per-clump summaries for each zoom level.
+- Rotates and discards secret keys, so old gusts can never be linked back.
 
 ### 5. Static Delivery
 
-Zone files and the summary are served from a CDN. Reads cost almost nothing.
+Zone files and summaries are served from a CDN. Reads cost almost nothing.
 
 ### 6. Renderer (browser)
 
-Canvas or WebGL.
+Canvas 2D (a WebGL renderer may be needed later for very dense heads).
 
-- Lays out IP prefixes spatially (Hilbert curve or meadow layout) so nearby networks stay near each other.
+- Lays out IP space as a meadow of nested seed heads: each /8 clump is a head, each /16 patch a floret inside it. Address order sets the angle, so neighbouring networks lean the same way; size follows activity. (A Hilbert grid was tried and kept tidier address order, but can't show crowds or growth.)
+- Fibers grow out from each patch centre in a golden-angle spiral, oldest in the middle, newest at the edge.
 - Loads the summary first, then detailed zones on zoom, like map tiles.
-- Computes the shared wind from time of day.
-- Replays each seed's envelope as its gust. Brightness drives colour or fluffiness; breathiness drives wobble.
-- Renders breaths as radiating pulses of colour and pinwheels as directional strokes.
-- Diffuses seeds into the ground colour as they age.
+- For each fiber, sums the lean from every gust that reaches it: direction from the gust's frozen wind, weight falling off with distance from where the gust landed, decaying with a half-life. A gust that is still playing pushes along its envelope and makes fibers wobble.
+- Draws pinwheel strokes on top, bent by the same lean.
+- Zoomed out, each clump is one head: fullness shows visits, lean shows recent breath, streaks show pinwheels.
 
 ### 7. Pinwheel Template
 
@@ -82,69 +88,58 @@ A printable PDF with a built-in tracking mark, plus instructions for making one 
 ## Privacy
 
 - Full IPs are processed only at ingest and never stored or published.
-- Published positions reveal only the network prefix; the scatter is keyed and one-way.
+- Published positions reveal only the network prefix. Fiber positions come from visit order, not from the address; gust and stroke positions use a keyed, one-way scatter.
 - Times are rounded.
-- Fingerprint hashes use a salt rotated daily and discarded.
-- Individual records are merged into anonymous patch colour as they age.
+- Device hashes use a salt rotated daily and discarded.
+- Gusts are deleted once they have relaxed; only per-patch visit history is kept long term.
 - A short privacy notice explains what is collected, why, and when it is deleted, and that audio never leaves the device.
 - Worth a review by someone versed in GDPR and CCPA before launch.
 
-## Fading and Renewal
+## Fibers, Combing and Relaxing
 
-Nothing is ever lost; breaths slowly turn from marks into colour.
-
-- **Two layers.** Fresh seeds sit on top as individual marks. Aged seeds are melted by compaction into a ground colour layer per IP patch.
-- **Diffusion.** Over time a seed loses its edges and its hue blends into its patch, so the field becomes an accumulating painting.
-- **Breath vs pinwheel.** Breaths leave radiating pulses of colour, like watercolour blooms. Pinwheels leave gusts with a distinct vector, like brushstrokes. Together they form fields of colour and shape.
-- **Renewal.** The browser keeps its own random token in local storage and sends it with each breath. A return from the same device and network revives that seed.
-- **Privacy fit.** The server never holds a lasting ID. Clearing the browser simply lets the old breath settle into the colour.
+- **Fibers accumulate forever.** One visit per device per day adds a small, fixed number of fibers (currently 5 in the spike). Patches grow outward as rings; the layout reflows during compaction.
+- **Combing.** A gust adds a lean to every fiber it reaches. Many breaths in one direction comb a patch smooth; breaths at different times of day leave crosscurrents.
+- **Relaxing.** Each gust's effect halves every few hours (spike default: 12), so a neighbourhood's lean shows its recent breathing, and a quiet patch returns to an open starburst.
+- **Live replay.** When a new gust arrives, its loudness curve plays out over a couple of seconds as a visible push and wobble, then it settles into the slowly relaxing lean.
+- **Pinwheel strokes** stay distinct for a few days, then fade.
 
 ## Visitor Layer
 
-Simply visiting is a quiet form of participation: visitors bring the water that makes the colour bloom.
+Visiting is now the main source of material: fibers replace the earlier "watering" idea.
 
-### Version 1: Watering
+### Bees (optional)
 
-- Each visit waters the visitor's own clump and the areas they zoom into.
-- Watered areas become rich and saturated; neglected corners dry out and go pale.
-- Watching a place keeps it vivid, a gentle feedback loop.
-- Stored only as a visit count per clump that slowly evaporates. No individual records.
-
-### Version 2: Bees
-
-- Each live visitor appears as a bee drifting around their neighbourhood and the seed heads they explore. It flies off when they leave.
-- Live visitors can lightly see and interact with each other.
-- Transport: a small real-time relay (for example a Cloudflare Durable Object) passing bee positions about once per second, storing nothing.
+- Each live visitor appears as a bee drifting around their neighbourhood and the heads they explore. It flies off when they leave.
+- Transport: a small real-time relay (for example a Cloudflare Durable Object) passing bee positions about once per second, storing nothing. The same relay can broadcast new gusts instantly.
 - Not peer-to-peer WebRTC: direct connections expose visitors' IPs to each other and scale poorly beyond a handful of people.
 
 ## Activity at Every Scale
 
-Visitors land in their own neighbourhood and zoom out through ever-larger clumps; each layer owns one visual channel so activity reads at a glance at any scale.
+Each layer owns one visual channel so activity reads at a glance at any scale.
 
-- **Breaths → fullness.** Many breaths make a big, fluffy seed head; few make a sparse head or a bud.
-- **Pinwheels → motion.** Pinwheel-heavy regions sway and stream visible strokes in the wind.
-- **Visitors → saturation.** Watered regions run deep and vivid; ignored ones fade pale.
-- **Old breaths → ground colour.** Accumulated, diffused breaths sit underneath as memory.
-- **Data.** Compaction stores a few summary numbers per clump per zoom level: breath count, pinwheel energy, visit saturation, average colour.
-- **Layout direction.** Leaning toward a meadow of nested seed heads (possibly golden-angle phyllotaxis) over a visible Hilbert grid.
+- **Visits → fullness.** Many visits make a big, dense head; few make a sparse head or a bud.
+- **Time of day of visits → colour.** Office clumps glow amber, night owls blue, mixed neighbourhoods rose.
+- **Recent breath → lean.** Combed heads lean the way their recent wind blew; quiet heads stand open.
+- **Pinwheels → streaming strokes.**
+- **Data.** Compaction stores a few summary numbers per clump per zoom level: fiber count, colour, recency, current lean, pinwheel activity.
 
 ## Wind
 
-Each seed carries the wind of its own moment for its whole existence.
+Each gust and stroke carries the wind of its own moment for its whole existence.
 
-- **Local time.** The browser reports its time zone; each breath records its rounded local time.
+- **Local time.** The browser reports its time zone; each record keeps its rounded local time.
 - **Frozen.** Direction is set once at the breath and never changes live.
-- **Sea-breeze mapping.** Time of day maps to a back-and-forth axis rather than a full rotation: midday breaths and midnight breaths point in opposite directions, with dawn and dusk as the turning points.
-- **Result.** The meadow becomes a map of habits: afternoon office clumps stream one way, night owls the other, mixed neighbourhoods form crosscurrents. VPN clumps swirl with many time zones at once.
+- **Sea-breeze mapping.** Time of day maps to a back-and-forth axis rather than a full rotation: midday and midnight breaths point in opposite directions, with dawn and dusk as calm turning points. A calm-hour breath still stirs fibers sideways in a small swirl.
+- **Result.** The meadow becomes a map of habits: afternoon office clumps combed one way, night owls the other, mixed neighbourhoods tousled. VPN clumps swirl with many time zones at once.
 
 ## Compaction and Freshness
 
-Your own breath appears instantly; everyone else's arrive within about a minute.
+Your own visit and breath appear instantly; everyone else's arrive within about a minute.
 
-- **Instant self.** The browser draws your seed the moment you blow and sends it in the background. No waiting on the server.
-- **Quick pass (target every minute).** Reads new breaths and visits, updates only the touched zone files, revives seeds whose token matches, and refreshes summaries up the clump chain.
-- **Deep pass (nightly).** Ages seeds into ground colour, evaporates watering, deletes processed log chunks, rotates and discards secret keys.
-- **Optional live mode.** The bee relay can broadcast new breaths to everyone instantly; compaction then just makes them permanent.
+- **Instant self.** The browser grows your fibers and plays your gust the moment you blow, and sends it in the background.
+- **Quick pass (target every minute).** Reads new visits and gusts and updates only the touched zone files and summaries.
+- **Deep pass (nightly).** Reflows grown patches, deletes relaxed gusts and faded strokes, deletes processed log chunks, rotates and discards secret keys.
+- **Optional live mode.** The relay broadcasts new gusts to everyone instantly; compaction then just makes them permanent.
 
 | Cost item | Rough figure (unverified) |
 | --- | --- |
@@ -156,8 +151,9 @@ Cost scales with the number of zones that change, not with visitor count.
 
 ## Open Questions
 
-- Hilbert curve or meadow layout for IP space
-- How long a seed stays distinct before it diffuses
+- Comb half-life (spike default 12 hours) and how far a strong breath reaches
+- Fibers per visit, and whether very old fibers should thin visually so huge crowds stay legible
+- How often to reflow the layout as patches grow
+- How long pinwheel strokes stay, and whether they leave a trace in ground colour
+- Breath detection: telling breath from voice reliably (flatness alone failed on iPhone; try band-wise flatness and a pitch test)
 - Verify current Cloudflare pricing; pick quick-pass interval (target: every minute)
-- Exact visual difference between breath seeds and pinwheel seeds
-- Exact curve of the sea-breeze mapping (calm points at dawn and dusk?)
