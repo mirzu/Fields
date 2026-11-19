@@ -10,6 +10,7 @@ A living web art piece: visitors blow into their microphone or onto a paper pinw
 Throwaway prototypes in `spikes/`, published to GitHub Pages: https://mirzu.github.io/Fields/
 
 - `breath.html`: mic → loudness, brightness, breathiness, breath detection, fingerprint
+- `field.html`: fake meadow of network neighbourhoods, meadow vs Hilbert layout, seed visuals, wind, fading, watering
 - `pinwheel.html`: webcam → coloured-mark tracking → spin speed and direction
 
 Run locally:

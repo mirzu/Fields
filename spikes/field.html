@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field spike</title>
+<link rel="stylesheet" href="spike.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  body { background: #11150f; }
+  #field { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; background: #11150f; touch-action: none; cursor: grab; }
+  #field.dragging { cursor: grabbing; }
+  .panel { position: fixed; left: 12px; top: 12px; width: 300px; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto;
+           background: rgba(20, 22, 20, 0.86); color: #e8e6e1; border: 1px solid #333; border-radius: 8px; padding: 10px 12px; font-size: 13px; backdrop-filter: blur(6px); }
+  .panel h1 { font-size: 1rem; margin: 0 0 4px; }
+  .panel a { color: #f2b632; }
+  .panel .row { margin: 6px 0; gap: 6px; }
+  .panel button { padding: 5px 9px; font-size: 13px; background: #2a2c2a; color: #e8e6e1; border-color: #444; }
+  .panel button.on, .panel button.primary { background: #f2b632; color: #111; border-color: #f2b632; }
+  .panel label { font-size: 12px; justify-content: space-between; }
+  .panel input[type=range] { width: 120px; }
+  .panel .muted { color: #9a9890; font-size: 12px; margin: 4px 0; }
+  #collapse { float: right; padding: 0 7px; }
+  .panel.min > :not(h1) { display: none; }
+  #dial { position: fixed; right: 12px; bottom: 12px; width: 150px; height: 150px; border: 0; background: transparent; pointer-events: none; }
+  #stats { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+<canvas id="dial" width="300" height="300"></canvas>
+<div class="panel" id="panel">
+  <h1>Field spike <button id="collapse" title="collapse">–</button></h1>
+  <p class="muted"><a href="index.html">← spikes</a> · fake data, nothing sent anywhere. Drag to pan, scroll or pinch to zoom.</p>
+  <div class="row">
+    Layout:
+    <button id="lMeadow" class="on">Meadow</button>
+    <button id="lHilbert">Hilbert</button>
+  </div>
+  <div class="row">
+    <button id="blow" class="primary">Blow (add my seed)</button>
+    <button id="blowPin">Pinwheel seed</button>
+    <button id="fit">Fit all</button>
+  </div>
+  <label>Days passed <input type="range" id="days" min="0" max="90" step="1" value="0"><output id="daysV"></output></label>
+  <label>Seed stays distinct (days) <input type="range" id="fresh" min="1" max="30" step="1" value="5"><output id="freshV"></output></label>
+  <label>Gust strength <input type="range" id="gust" min="0" max="3" step="0.1" value="1"><output id="gustV"></output></label>
+  <div class="row">
+    <label><input type="checkbox" id="labels" checked> prefix labels</label>
+    <label><input type="checkbox" id="watering" checked> watering</label>
+  </div>
+  <p class="muted">
+    <b>Colour</b> = time of day (amber day, rose dawn/dusk, blue night).<br><b>Breath</b>: bloom + seed head; filaments = fluff, wobble = breathiness.<br>
+    <b>Pinwheel</b>: streaming stroke along its wind, curled by spin.<br>
+    <b>Zoomed out</b>: fullness = breaths, sway = pinwheels, saturation = watching, ground = old breaths.<br>
+    Wind (dial, bottom right): midday and midnight blow opposite ways; dawn and dusk are calm.
+  </p>
+  <p class="muted" id="stats"></p>
+</div>
+<script type="module" src="field.js"></script>
+</body>
+</html>
