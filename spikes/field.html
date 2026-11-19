@@ -24,11 +24,21 @@
   .panel.min > :not(h1) { display: none; }
   #dial { position: fixed; right: 12px; bottom: 12px; width: 150px; height: 150px; border: 0; background: transparent; pointer-events: none; }
   #stats { font-variant-numeric: tabular-nums; }
+  #pw { position: fixed; right: 12px; bottom: 172px; width: 150px; text-align: center; color: #e8e6e1; font-size: 12px; user-select: none; -webkit-user-select: none; }
+  #pwc { width: 150px; height: 150px; border: 0; background: rgba(20,22,20,0.6); border-radius: 50%; touch-action: none; cursor: grab; }
+  #pwc.dragging { cursor: grabbing; }
+  #pwLabel { margin-top: 4px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+  #toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: rgba(20,22,20,0.9); color: #e8e6e1; border: 1px solid #444;
+           border-radius: 6px; padding: 6px 12px; font-size: 13px; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+  #toast.on { opacity: 1; }
+  @media (max-width: 600px) { #pw { width: 110px; bottom: 140px; } #pwc { width: 110px; height: 110px; } #dial { width: 120px; height: 120px; } }
 </style>
 </head>
 <body>
 <canvas id="field"></canvas>
 <canvas id="dial" width="300" height="300"></canvas>
+<div id="pw"><canvas id="pwc" width="300" height="300"></canvas><div id="pwLabel">Spin me: drag around or flick</div></div>
+<div id="toast"></div>
 <div class="panel" id="panel">
   <h1>Field spike <button id="collapse" title="collapse">–</button></h1>
   <p class="muted"><a href="index.html">← spikes</a> · the rest of the meadow is fake data. Drag to pan, scroll or pinch to zoom.</p>
@@ -43,7 +53,7 @@
   </div>
   <div class="row">
     <button id="blow" class="primary">Blow</button>
-    <button id="blowPin">Pinwheel</button>
+    <button id="blowPin">Random pinwheel</button>
     <button id="visit">Visit again</button>
   </div>
   <label>Hours passed <input type="range" id="hours" min="0" max="96" step="1" value="0"><output id="hoursV"></output></label>
@@ -58,7 +68,7 @@
   <p class="muted">
     <b>Visits</b> grow fibers in your patch; they never go away. Colour = time of day of the visit (amber day, rose dawn/dusk, blue night); recent visits are brighter.<br>
     <b>Breath</b> combs fibers along its wind: strongest in its own patch, weaker in nearby patches of the clump. The gust plays out, then the lean slowly relaxes.<br>
-    <b>Pinwheel</b>: streaming stroke along its wind, curled by spin, bent by local breath.<br>
+    <b>Pinwheel</b> (spin the one on the right, or a paper one with the camera): streaming stroke along its wind, curled by spin direction; faster spins make longer, faster-flowing strokes. Bent by local breath.<br>
     <b>Zoomed out</b>: fullness = visits, lean = recent breath, streaks = pinwheels.<br>
     Wind (dial, bottom right): midday and midnight blow opposite ways; dawn and dusk are calm.
   </p>

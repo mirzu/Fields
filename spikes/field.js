@@ -107,10 +107,11 @@ function addFibers(p, hour, ageDays) {
   }
 }
 
-function addPin(p, hour, ageDays, live) {
+function addPin(p, hour, ageDays, live, ch = {}) {
   const w = windAt(hour);
   p.pins.push({
-    hour, age: ageDays, u: rnd(), v: rnd(), spin: rnd() < 0.5 ? 1 : -1, peak: 0.3 + rnd() * 0.7,
+    hour, age: ageDays, u: rnd(), v: rnd(),
+    spin: ch.spin ?? (rnd() < 0.5 ? 1 : -1), peak: ch.peak ?? 0.3 + rnd() * 0.7, env: ch.env ?? null,
     wx: w.x, wy: w.y, ws: w.s, born: live ? performance.now() : -1e12,
   });
 }
@@ -508,7 +509,7 @@ function drawPin(p, s, px, py, k) {
   const hue = hueOfHour(s.hour);
   let dx = s.wx - AXIS_PERP.x * s.spin * 0.35, dy = s.wy - AXIS_PERP.y * s.spin * 0.35;
   const dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
-  const L = u * (1.2 + s.peak * 1.4) * (1 + f * 0.5);
+  const L = u * (2.2 + s.peak * 3) * (1 + f * 0.3);
   const nx = -dy * s.spin, ny = dx * s.spin;
   // Local breath bends the stroke: control point and tail are pushed along the comb.
   const x0 = sx - dx * L * 0.5, y0 = sy - dy * L * 0.5;
@@ -516,15 +517,16 @@ function drawPin(p, s, px, py, k) {
   const cx = sx + nx * L * 0.35 + ln.x * L * 0.5, cy = sy + ny * L * 0.35 + ln.y * L * 0.5;
   const a = 0.85 - f * 0.6;
   g.lineCap = 'round';
-  for (const [w, al, l] of [[0.16, 0.25, 45], [0.08, 0.6, 70], [0.03, 0.9, 92]]) {
+  drawBlob(sx, sy, L * 0.7, hue, 70, 60, a * 0.35); // glow so strokes read apart from fibers
+  for (const [w, al, l] of [[0.24, 0.3, 50], [0.12, 0.65, 72], [0.05, 0.95, 94]]) {
     g.strokeStyle = `hsla(${hue},70%,${l}%,${a * al})`;
     g.lineWidth = Math.max(0.5, u * w * (1 - f * 0.5));
     g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(cx, cy, x1, y1); g.stroke();
   }
-  g.setLineDash([u * 0.12, u * 0.3]);
-  g.lineDashOffset = -time * u * (0.4 + Math.abs(s.ws));
+  g.setLineDash([u * 0.18, u * 0.4]);
+  g.lineDashOffset = -time * u * (0.3 + Math.abs(s.ws) * 0.5 + s.peak * 0.8) * s.spin;
   g.strokeStyle = `hsla(${hue},40%,96%,${a * 0.8})`;
-  g.lineWidth = Math.max(0.5, u * 0.025);
+  g.lineWidth = Math.max(0.8, u * 0.04);
   g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(cx, cy, x1, y1); g.stroke();
   g.setLineDash([]); g.lineCap = 'butt';
   if (birth < 1) drawBlob(sx, sy, u * 3 * birth, hue, 70, 70, (1 - birth) * 0.5);
@@ -697,11 +699,119 @@ function pruneGusts() {
   for (let i = gusts.length - 1; i >= 0; i--) if (dead(gusts[i])) gusts.splice(i, 1);
 }
 
+// ---------- on-screen pinwheel ----------
+// Drag around it (or flick across it) to spin. It keeps spinning with friction. One spin, from
+// speeding up to spinning down, becomes one pinwheel stroke in your patch: direction from the
+// spin, strength from the peak speed, and the speed curve kept as the stroke's envelope.
+const pw = { cv: $('pwc'), ang: 0, omega: 0, drag: null, session: null };
+const pwg = pw.cv.getContext('2d');
+const wrapAngle = (a) => { while (a > Math.PI) a -= TAU; while (a <= -Math.PI) a += TAU; return a; };
+function pwPointer(e) {
+  const r = pw.cv.getBoundingClientRect();
+  return { x: e.clientX - (r.left + r.width / 2), y: e.clientY - (r.top + r.height / 2), t: performance.now() };
+}
+pw.cv.addEventListener('pointerdown', (e) => {
+  try { pw.cv.setPointerCapture(e.pointerId); } catch { /* synthetic pointers */ }
+  pw.cv.classList.add('dragging');
+  const q = pwPointer(e);
+  pw.drag = { last: q, lastAng: Math.atan2(q.y, q.x) };
+});
+pw.cv.addEventListener('pointermove', (e) => {
+  if (!pw.drag) return;
+  const q = pwPointer(e), d = pw.drag, dt = Math.max(1, q.t - d.last.t) / 1000;
+  const ang = Math.atan2(q.y, q.x), rad = Math.hypot(q.x, q.y);
+  if (rad > 6) { // too near the hub, angle is meaningless
+    const da = wrapAngle(ang - d.lastAng);
+    pw.ang += da;
+    pw.omega = lerp(pw.omega, clamp(da / dt, -120, 120), 0.5);
+  }
+  d.last = q; d.lastAng = ang;
+});
+const pwEnd = () => { pw.drag = null; pw.cv.classList.remove('dragging'); };
+pw.cv.addEventListener('pointerup', pwEnd);
+pw.cv.addEventListener('pointercancel', pwEnd);
+
+function updatePinwheel(dt) {
+  if (!pw.drag) { pw.omega *= Math.exp(-dt * 0.7); pw.ang += pw.omega * dt; }
+  else if (nowMs - pw.drag.last.t > 80) pw.omega *= Math.exp(-dt * 8); // holding still stops it
+  const rps = pw.omega / TAU, speed = Math.abs(rps);
+  // Session: starts above 0.4 turns/s, ends after 0.4 s below 0.15 turns/s.
+  if (!pw.session && speed > 0.4) pw.session = { t0: nowMs, samples: [], signed: 0, quietSince: 0 };
+  const ss = pw.session;
+  if (ss) {
+    ss.samples.push(speed); ss.signed += rps * dt;
+    if (speed < 0.15) { ss.quietSince ||= nowMs; } else ss.quietSince = 0;
+    if (ss.quietSince && nowMs - ss.quietSince > 400) finishSpin(ss);
+  }
+  $('pwLabel').textContent = speed > 0.05
+    ? `${speed.toFixed(1)} turns/s ${rps > 0 ? 'clockwise' : 'counter-cw'}`
+    : 'Spin me: drag around or flick';
+  drawPinwheel();
+}
+
+function finishSpin(ss) {
+  pw.session = null;
+  const n = ss.samples.length, peakRps = Math.max(...ss.samples);
+  const dur = (nowMs - ss.t0) / 1000;
+  if (dur < 0.5 || peakRps < 0.8 || !home) return; // a nudge, not a spin
+  const env = [];
+  for (let i = 0; i < 16; i++) {
+    const a = Math.floor((i / 16) * n), z = Math.max(a + 1, Math.floor(((i + 1) / 16) * n));
+    let sum = 0; for (let j = a; j < z; j++) sum += ss.samples[j];
+    env.push(sum / (z - a) / peakRps);
+  }
+  const spin = ss.signed >= 0 ? 1 : -1;
+  const peak = clamp(peakRps / 4, 0.15, 1); // ~4 turns/s and up is full strength
+  addPin(home, nowHour(), 0, true, { spin, peak, env });
+  placePin(home, home.pins.at(-1));
+  if (!visible.includes(home)) goHome();
+  toast(`Pinwheel stroke placed in ${home.a}.${home.b}: ${peakRps.toFixed(1)} turns/s peak, ${spin > 0 ? 'clockwise' : 'counter-clockwise'}`);
+}
+
+let toastTimer = 0;
+function toast(msg) {
+  const el = $('toast'); el.textContent = msg; el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 3500);
+}
+
+// Classic 4-blade paper pinwheel, two-tone, in the colour of your hour.
+function drawPinwheel() {
+  const S = 300, c = S / 2, R = 120, hue = hueOfHour(nowHour());
+  pwg.clearRect(0, 0, S, S);
+  const blur = clamp(Math.abs(pw.omega) / 40, 0, 1);
+  const ghosts = blur > 0.05 ? 4 : 0;
+  for (let gi = ghosts; gi >= 0; gi--) {
+    const a0 = pw.ang - pw.omega * 0.012 * gi;
+    pwg.globalAlpha = gi === 0 ? 1 : 0.18 * blur;
+    for (let k = 0; k < 4; k++) {
+      const a = a0 + (k * Math.PI) / 2;
+      const tip = { x: c + Math.cos(a) * R, y: c + Math.sin(a) * R };
+      const side = { x: c + Math.cos(a + Math.PI / 2) * R * 0.5, y: c + Math.sin(a + Math.PI / 2) * R * 0.5 };
+      const fold = { x: c + Math.cos(a + 0.62) * R * 0.92, y: c + Math.sin(a + 0.62) * R * 0.92 };
+      // Front face of the blade.
+      pwg.fillStyle = `hsl(${hue},70%,${k % 2 ? 62 : 52}%)`;
+      pwg.beginPath(); pwg.moveTo(c, c); pwg.lineTo(tip.x, tip.y);
+      pwg.quadraticCurveTo(fold.x, fold.y, side.x, side.y); pwg.closePath(); pwg.fill();
+      // Folded-over flap.
+      pwg.fillStyle = `hsl(${hue},55%,${k % 2 ? 80 : 74}%)`;
+      pwg.beginPath(); pwg.moveTo(c, c); pwg.lineTo(tip.x, tip.y);
+      pwg.lineTo(c + Math.cos(a + 0.35) * R * 0.45, c + Math.sin(a + 0.35) * R * 0.45); pwg.closePath(); pwg.fill();
+    }
+  }
+  pwg.globalAlpha = 1;
+  // Tracking mark on one blade, like the printable template.
+  pwg.fillStyle = '#e020e0';
+  pwg.beginPath(); pwg.arc(c + Math.cos(pw.ang + 0.25) * R * 0.75, c + Math.sin(pw.ang + 0.25) * R * 0.75, 9, 0, TAU); pwg.fill();
+  pwg.fillStyle = '#ddd';
+  pwg.beginPath(); pwg.arc(c, c, 9, 0, TAU); pwg.fill();
+}
+
 // ---------- loop ----------
 let last = performance.now(), fpsAcc = 0, fpsN = 0, statT = 0;
 function frame(now) {
   nowMs = now; frameId++;
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const realDt = Math.min(1, Math.max(0, (now - last) / 1000)); last = now;
+  const dt = Math.min(0.1, realDt); // animation step; physics that must track real time use realDt
   time += dt;
   layoutT += clamp(layoutTarget - layoutT, -dt / 1.2, dt / 1.2);
   if (camAnim) {
@@ -711,9 +821,10 @@ function frame(now) {
     if (q >= 1) camAnim = null;
   }
   simulateNeighbours();
+  updatePinwheel(realDt);
   if (frameId % 120 === 0) pruneGusts();
   draw();
-  fpsAcc += dt; fpsN++;
+  fpsAcc += realDt; fpsN++;
   if (now - statT > 500) {
     const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; statT = now;
     const total = patches.reduce((a, p) => a + p.fibers.length, 0);
@@ -792,4 +903,4 @@ async function boot() {
   requestAnimationFrame(frame);
 }
 boot();
-window.__field = { draw, heads, patches, gusts, cam, params, flyTo, setLayout, blow, pin, visit, goHome, get home() { return home; } };
+window.__field = { pw, draw, heads, patches, gusts, cam, params, flyTo, setLayout, blow, pin, visit, goHome, get home() { return home; } };

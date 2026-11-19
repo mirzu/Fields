@@ -10,7 +10,7 @@ A living web art piece: every visit grows fibers in the visitor's patch of an ab
 Throwaway prototypes in `spikes/`, published to GitHub Pages: https://mirzu.github.io/Fields/
 
 - `breath.html`: mic → loudness, brightness, breathiness, breath detection, fingerprint
-- `field.html`: fake meadow of network neighbourhoods; visits grow fibers, breaths comb them and relax, pinwheel strokes bend with the comb
+- `field.html`: fake meadow of network neighbourhoods; visits grow fibers, breaths comb them and relax, pinwheel strokes (spin the on-screen pinwheel) bend with the comb
 - `pinwheel.html`: webcam → coloured-mark tracking → spin speed and direction
 
 Run locally:

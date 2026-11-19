@@ -11,7 +11,7 @@ A living web art piece. Every visit grows fibers in the visitor's patch of an ab
 - **Shared IPs** (offices, VPNs, carrier NAT) appear as one crowded patch.
 - **Wind** comes from the visitor's local time of day and is frozen into each gust or stroke when it is recorded, so everyone at 4:00 local blows the same way.
 - **Colour** also comes from time of day: daytime visits are amber, dawn and dusk rose, night blue. Recent visits are brighter; old fibers dim but remain.
-- Two input modes, both first-class: breath via microphone and a physical paper pinwheel via camera.
+- Input modes: breath via microphone, a physical paper pinwheel via camera, or an on-screen pinwheel spun with mouse or touch (no printer or camera needed).
 
 ## Design Constraints
 
@@ -26,7 +26,9 @@ A living web art piece. Every visit grows fibers in the visitor's patch of an ab
 
 **Breath mode.** getUserMedia opens the mic with noise suppression and echo cancellation turned off. An AudioContext feeds an AnalyserNode, sampled about 60 times per second for waveform (RMS loudness) and frequency spectrum. All audio stays on the device.
 
-**Pinwheel mode.** The webcam tracks a bold mark on one blade frame to frame to compute spin speed and direction. Frame rate (about 30 fps) limits reliable speed to roughly 15 turns per second, so the template favours slower, stiffer blades. The mic can assist when the pinwheel blurs.
+**Pinwheel mode (camera).** The webcam tracks a bold mark on one blade frame to frame to compute spin speed and direction. Frame rate (about 30 fps) limits reliable speed to roughly 15 turns per second, so the template favours slower, stiffer blades. The mic can assist when the pinwheel blurs.
+
+**Pinwheel mode (on screen).** A paper-style pinwheel drawn in the page. Dragging around it or flicking across it spins it; it coasts with friction. One spin, from speeding up to spinning down, becomes one stroke: direction from the spin, strength from the peak speed (about 4 turns/s is full strength), and the speed curve kept as the stroke's envelope. Same record as a camera pinwheel, with a source flag.
 
 **Gust character (about 20 bytes).** Describes how a breath moves fibers.
 
@@ -35,7 +37,7 @@ A living web art piece. Every visit grows fibers in the visitor's patch of an ab
 - Breathiness: spectral flatness, 1 byte. Spreads the comb direction (turbulence) and drives wobble. Also part of validating that it was a breath.
 - Duration: 1 byte
 - Peak strength: 1 byte. Sets how hard and how far the gust pushes.
-- Mode flag: breath or pinwheel, plus spin direction
+- Mode flag: breath or pinwheel (camera or on-screen), plus spin direction
 
 **Device hash.** A daily-salted hash, used only to count one visit per device per day and to tell apart devices sharing one IP.
 
