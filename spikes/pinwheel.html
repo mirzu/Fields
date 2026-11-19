@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pinwheel spike</title>
+<link rel="stylesheet" href="spike.css">
+<style>
+  #view { cursor: crosshair; width: 640px; }
+  .swatch { width: 28px; height: 28px; border-radius: 4px; border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="index.html">← spikes</a></p>
+  <h1>Pinwheel spike</h1>
+  <p class="muted">Put a bold, saturated mark (magenta, green or orange works best) near the tip of one blade. Start the camera, then <b>click the mark</b> to pick its colour. The hub is found automatically from the mark's circular path, or <b>shift-click</b> the hub to set it by hand. Video stays in this tab.</p>
+
+  <div class="row">
+    <button id="start" class="primary">Start camera</button>
+    <select id="cam"></select>
+    <div class="swatch" id="swatch"></div>
+    <label><input type="checkbox" id="autoHub" checked> auto hub</label>
+    <label><input type="checkbox" id="showMask" checked> show matched pixels</label>
+  </div>
+  <div class="row">
+    <label>Hue tolerance ° <input type="range" id="hueTol" min="4" max="60" value="18"><output id="hueTolV"></output></label>
+    <label>Min saturation <input type="range" id="minSat" min="0.1" max="0.9" step="0.05" value="0.4"><output id="minSatV"></output></label>
+    <label>Min brightness <input type="range" id="minVal" min="0.1" max="0.9" step="0.05" value="0.25"><output id="minValV"></output></label>
+  </div>
+
+  <canvas id="view" width="320" height="240"></canvas>
+
+  <div class="stats" style="margin-top:8px">
+    <div class="stat"><b id="sSpeed">–</b><span>turns / s (smoothed)</span></div>
+    <div class="stat"><b id="sDir">–</b><span>direction (as seen by camera)</span></div>
+    <div class="stat"><b id="sFps">–</b><span>camera frames / s</span></div>
+    <div class="stat"><b id="sStep">–</b><span>rotation per frame °</span></div>
+    <div class="stat"><b id="sPix">–</b><span>matched pixels · spread px</span></div>
+    <div class="stat"><b id="sMax">–</b><span>peak turns / s this session</span></div>
+  </div>
+  <p class="muted" id="warn"></p>
+
+  <h2>Speed (last ~10 s)</h2>
+  <canvas id="plot" width="960" height="200"></canvas>
+  <p class="muted">Above zero: clockwise. Dashed lines: aliasing limit (half a turn per frame) for the measured frame rate. Gaps: mark lost.</p>
+</main>
+<script type="module" src="pinwheel.js"></script>
+</body>
+</html>

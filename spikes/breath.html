@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breath spike</title>
+<link rel="stylesheet" href="spike.css">
+</head>
+<body>
+<main>
+  <p><a href="index.html">← spikes</a></p>
+  <h1>Breath spike</h1>
+  <p class="muted">Mic → loudness (RMS), brightness (spectral centroid), breathiness (spectral flatness). Detects breaths and packs each into a fingerprint. Audio stays in this tab.</p>
+
+  <div class="row">
+    <button id="start" class="primary">Start mic</button>
+    <label><input type="checkbox" id="processing"> browser noise suppression / echo cancel / AGC (compare)</label>
+    <button id="export">Export breaths (JSON)</button>
+    <button id="clear">Clear</button>
+  </div>
+  <div class="row">
+    <label>Onset × floor <input type="range" id="onRatio" min="1.5" max="15" step="0.5" value="5"><output id="onRatioV"></output></label>
+    <label>Min flatness <input type="range" id="minFlat" min="0" max="0.8" step="0.01" value="0.2"><output id="minFlatV"></output></label>
+    <label>Min centroid Hz <input type="range" id="minCent" min="0" max="3000" step="50" value="600"><output id="minCentV"></output></label>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="sRms">–</b><span>loudness dBFS</span></div>
+    <div class="stat"><b id="sFloor">–</b><span>noise floor dBFS</span></div>
+    <div class="stat"><b id="sCent">–</b><span>centroid Hz</span></div>
+    <div class="stat"><b id="sFlat">–</b><span>flatness 0–1</span></div>
+    <div class="stat"><b id="sState">idle</b><span>state</span></div>
+    <div class="stat"><b id="sRate">–</b><span>analysis frames/s · sample rate</span></div>
+  </div>
+
+  <h2>Live (last ~6 s)</h2>
+  <canvas id="plot" width="960" height="300"></canvas>
+  <p class="muted">Orange: loudness · dashed: floor and onset threshold · blue: flatness (0–1) · green: centroid (log, 100 Hz–8 kHz) · shaded: detected breath.</p>
+
+  <h2>Detected breaths</h2>
+  <table>
+    <thead><tr><th>#</th><th>envelope</th><th>dur s</th><th>peak dB</th><th>centroid</th><th>flatness</th><th>verdict</th><th>fingerprint (17 B)</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+<script type="module" src="breath.js"></script>
+</body>
+</html>
